@@ -8,5 +8,12 @@ assert(generate_common_KEK(0xABACABA, generate_public_key(0xABACABADABA, base_pa
 
 assert(GOST34112012H256(int(0x323130393837363534333231303938373635343332313039383736353433323130393837363534333231303938373635343332313039383736353433323130).to_bytes(63, 'big')) == 0x00557be5e584fd52a449b16b0251d05d27f94ab76cbaa6da890b59d8ef1e159d)
 assert(GOST34112012H256(int(0xfbe2e5f0eee3c820fbeafaebef20fffbf0e1e0f0f520e0ed20e8ece0ebe5f0f2f120fff0eeec20f120faf2fee5e2202ce8f6f3ede220e8e6eee1e8f0f2d1202ce8f0f2e5e220e5d1).to_bytes(72, 'big')) == 0x508f7e553c06501d749a66fc28c6cac0b005746d97537fa85d9e40904efed29d)
+def to_int(msg):
+  res = 0
+  for i in range(len(msg)):
+      res += (2**(8 * i)) * msg[-i-1]
+  return res
+
+assert(to_int(GOST2814789ECB_decode(GOST2814789ECB_encode(int(0x1001011011110000).to_bytes(32, 'big'), int(0x1001011000001111).to_bytes(32,'big')), int(0x1001011000001111).to_bytes(32,'big'))) == int(0x1001011011110000))
 
 print('OK.')

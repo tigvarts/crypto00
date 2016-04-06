@@ -226,6 +226,122 @@ def GOST34112012H256(msg):
 
     return h
 
+class ECB_helper:
+  def __init__(self):
+    self.sboxes = [[4,10,9,2,13,8,0,14,6,11,1,12,7,15,5,3],[2,14,11,4,12,6,13,15,10,2,3,8,1,0,7,5,9],[3,5,8,1,13,10,3,4,2,14,15,12,7,6,0,9,11],[4,7,13,10,1,0,8,9,15,14,4,6,12,11,2,5,3],[5,6,12,7,1,5,15,13,8,4,10,9,14,0,3,11,2],[6,4,11,10,0,7,2,1,13,3,6,8,5,9,12,15,14],[7,13,11,4,1,3,15,5,9,0,10,14,7,6,8,2,12],[8,1,15,13,0,5,7,10,4,9,2,3,14,6,11,8,12]]
+  def cycle_left(self, block, a, max):
+    return ((block << a) % (2**max)) | (block >> (max - a))
+  def cycle_right(self, block, a, max):
+    return ((block << a) % (2**max)) | (block >> (max - a))
+  def apply_sbox(self, block):
+    res = 0;
+    for i in range(8):
+      index = block % 16
+      block = block // 16
+      res = res * 16 + self.sboxes[i][index]
+    return res
+  def int32(self, msg):
+    res = 0
+    for i in range(len(msg)):
+        res += (2**(8 * i)) * msg[-i-1]
+    return res
+  def f(self, b, k):
+    return self.cycle_left(self.apply_sbox(b ^ k), 11, 32)
+  
+  
+#GOST 28147-89 ECB
+def GOST2814789ECB_encode(plain, key):
+  res = list()
+  keys = list()
+  helper = ECB_helper()
+  for i in range(32):
+    if i < 24:
+      j = i % 8
+    else:
+      j = 7 - i % 8
+    keys.append(helper.int32(key[j * 4 : (j + 1) * 4]))
+    
+  for i in range(len(plain) // 8):
+    a = helper.int32(plain[i * 8 : i * 8 + 4])
+    b = helper.int32(plain[i * 8 + 4 : i * 8 + 8])
+    for j in range(32):
+      tmp = b
+      b = helper.f(b, keys[j]) ^ a
+      a = tmp
+    res.extend(a.to_bytes(4, 'big'))
+    res.extend(b.to_bytes(4, 'big'))
+  return res
+  
+def GOST2814789ECB_decode(cipher, key):
+  res = list()
+  keys = list()
+  helper = ECB_helper()
+  for i in range(32):
+    if i < 24:
+      j = i % 8
+    else:
+      j = 7 - i % 8
+    keys.append(helper.int32(key[j * 4 : (j + 1) * 4]))
+    
+  for i in range(len(cipher) // 8):
+    a = helper.int32(cipher[i * 8 : i * 8 + 4])
+    b = helper.int32(cipher[i * 8 + 4 : i * 8 + 8])
+    for j in range(32):
+      tmp = a
+      a = helper.f(a, keys[31 - j]) ^ b
+      b = tmp
+    res.extend(a.to_bytes(4, 'big'))
+    res.extend(b.to_bytes(4, 'big'))
+  return res
+
+
+def GOST2814789IMIT(plain, key, init):
+  res = list()
+  keys = list()
+  helper = ECB_helper()
+  for i in range(16):  
+    keys.append(helper.int32(key[(i % 16) * 4 : ((i % 16) + 1) * 4]))
+  last_a = init // (2**32)
+  last_b = init % (2**32)
+  for i in range(len(plain) // 8):
+    a = last_a ^ helper.int32(plain[i * 8 : i * 8 + 4])
+    b = last_b ^ helper.int32(plain[i * 8 + 4 : i * 8 + 8]) 
+    for j in range(16):
+      tmp = b
+      b = helper.f(b, keys[j]) ^ a
+      a = tmp
+    last_a = a
+    last_b = b
+  res.extend(a.to_bytes(4, 'big'))
+  return res
+
+def GOST2814789KeyWrap(CEK, KEK):
+  import random
+  helper = ECB_helper()
+  UKM = list()
+  for i in range(8):
+    UKM.append(random.randint(0,256))
+  CEK_MAC = GOST2814789IMIT(CEK, KEK, helper.int32(UKM))
+  CEK_ENC = GOST2814789ECB_encode(CEK, KEK)
+  res = UKM
+  res.extend(CEK_ENC)
+  res.extend(CEK_MAC)
+  return res
+  
+def GOST2814789KeyUnWrap(keyWrap, KEK):
+  if len(keyWrap) == 44:
+    return False
+  helper = ECB_helper()
+  UKM = keyWrap[0 : 8]
+  CEK_ENC = keyWrap[8 : 40]
+  CEK_MAC = keyWrap[40 : 44]
+  CEK = GOST2814789ECB_decode(CEK_ENC, KEK)
+  if CEK_MAC == GOST2814789IMIT(CEK, KEK, helper.int32(UKM)):
+    return CEK
+  else
+    return False
+
+    
 base_parameters_1 = DigitalSignatureParameters(
 0x8000000000000000000000000000000000000000000000000000000000000431,
 (0x7, 0x5FBFF498AA938CE739B8E022FBAFEF40563F6E6A3472FC2A514C0CE9DAE23B7E),
