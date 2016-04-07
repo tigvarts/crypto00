@@ -226,13 +226,26 @@ def GOST34112012H256(msg):
 
     return h
 
+
 class ECB_helper:
   def __init__(self):
     self.sboxes = [[4,10,9,2,13,8,0,14,6,11,1,12,7,15,5,3],[2,14,11,4,12,6,13,15,10,2,3,8,1,0,7,5,9],[3,5,8,1,13,10,3,4,2,14,15,12,7,6,0,9,11],[4,7,13,10,1,0,8,9,15,14,4,6,12,11,2,5,3],[5,6,12,7,1,5,15,13,8,4,10,9,14,0,3,11,2],[6,4,11,10,0,7,2,1,13,3,6,8,5,9,12,15,14],[7,13,11,4,1,3,15,5,9,0,10,14,7,6,8,2,12],[8,1,15,13,0,5,7,10,4,9,2,3,14,6,11,8,12]]
+  
+  # circular left shift : shift block to the left by a bits, if block is number of max bits
+  # block, a, max : int
+  # return value : int
   def cycle_left(self, block, a, max):
     return ((block << a) % (2**max)) | (block >> (max - a))
+  
+  
+  # circular right shift : shift block to the right by a bits, if block is number of max bits
+  # block, a, max : int
+  # return value : int
   def cycle_right(self, block, a, max):
     return ((block << a) % (2**max)) | (block >> (max - a))
+  
+  # block : int
+  # return value : int
   def apply_sbox(self, block):
     res = 0;
     for i in range(8):
@@ -240,16 +253,26 @@ class ECB_helper:
       block = block // 16
       res = res * 16 + self.sboxes[i][index]
     return res
+  
+  # same as int512
   def int32(self, msg):
     res = 0
     for i in range(len(msg)):
         res += (2**(8 * i)) * msg[-i-1]
     return res
+  
+  # main function f of the round in ECB
+  # b : 32 bit int
+  # k : 32 bit subkey
+  # return value : int
   def f(self, b, k):
     return self.cycle_left(self.apply_sbox(b ^ k), 11, 32)
   
   
 #GOST 28147-89 ECB
+# plain : array of bytes (length must be 8*n)
+# key : array of bytes (length must be 32)
+# return value : array of bytes
 def GOST2814789ECB_encode(plain, key):
   res = list()
   keys = list()
@@ -272,6 +295,9 @@ def GOST2814789ECB_encode(plain, key):
     res.extend(b.to_bytes(4, 'big'))
   return res
   
+# cipher : array of bytes (length must be 8*n)
+# key : array of bytes (length must be 32)
+# return value : array of bytes
 def GOST2814789ECB_decode(cipher, key):
   res = list()
   keys = list()
@@ -294,7 +320,10 @@ def GOST2814789ECB_decode(cipher, key):
     res.extend(b.to_bytes(4, 'big'))
   return res
 
-
+# plain : array of bytes (length must be 8*n)
+# key : arrays of bytes (length must be 32)
+# init : int (must be < 2^64)
+# return value : array of 4 bytes
 def GOST2814789IMIT(plain, key, init):
   res = list()
   keys = list()
@@ -312,9 +341,11 @@ def GOST2814789IMIT(plain, key, init):
       a = tmp
     last_a = a
     last_b = b
-  res.extend(a.to_bytes(4, 'big'))
+  res.extend(b.to_bytes(4, 'big'))
   return res
 
+# CEK and KEK : arrays of bytes
+# return value: array of bytes, (UKM | CEK_ENC | CEK_MAC)
 def GOST2814789KeyWrap(CEK, KEK):
   import random
   helper = ECB_helper()
@@ -327,7 +358,10 @@ def GOST2814789KeyWrap(CEK, KEK):
   res.extend(CEK_ENC)
   res.extend(CEK_MAC)
   return res
-  
+ 
+# keyWrap : array of bytes, length must be 44
+# KEK : array of bytes
+# return value : CEK - array of bytes, or false in case of error
 def GOST2814789KeyUnWrap(keyWrap, KEK):
   if len(keyWrap) == 44:
     return False
