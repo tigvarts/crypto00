@@ -8,6 +8,12 @@ assert(generate_common_KEK(0xABACABA, generate_public_key(0xABACABADABA, base_pa
 
 assert(GOST34112012H256(int(0x323130393837363534333231303938373635343332313039383736353433323130393837363534333231303938373635343332313039383736353433323130).to_bytes(63, 'big')) == int(0x00557be5e584fd52a449b16b0251d05d27f94ab76cbaa6da890b59d8ef1e159d).to_bytes(64, 'big'))
 assert(GOST34112012H256(int(0xfbe2e5f0eee3c820fbeafaebef20fffbf0e1e0f0f520e0ed20e8ece0ebe5f0f2f120fff0eeec20f120faf2fee5e2202ce8f6f3ede220e8e6eee1e8f0f2d1202ce8f0f2e5e220e5d1).to_bytes(72, 'big')) == int(0x508f7e553c06501d749a66fc28c6cac0b005746d97537fa85d9e40904efed29d).to_bytes(64, 'big'))
+
+msg = 'Hello world! This is secret information: 0123456789.'.encode()
+CEK = '01234567890123456789012345678901'.encode()
+IV = '01234567'.encode()
+assert(cipher_feedback_mode_decode(cipher_feedback_mode_encode(msg, CEK, IV), CEK, IV) == msg)
+
 def to_int(msg):
   res = 0
   for i in range(len(msg)):
