@@ -1,5 +1,19 @@
 class DigitalSignatureParameters:
+    """
+This class contains all nessecary settings and parameters of digital signature,
+according to GOST R 34.10-2012. Also it contains mathematical methods for working
+with points of ellipting curve stored in the class instance.
+    """
     def __init__(self, p, elliptic_curve, m, q, x_p, y_p, hash_func):
+        """
+Stores digital signature parameters in created class instance.
+Checks if digital signature is valid using constraints from GOST R 24.10-2012.
+
+p : BigInteger
+elliptic_curve : integer J or tuple of integers (a, b)
+m, q, x_p, y_p : BigIntegers
+hash_func : function taking array of bytes and returning array of 64 bytes.
+        """
         self.p = p
         if isinstance(elliptic_curve, tuple):
             self.a, self.b = elliptic_curve
@@ -17,7 +31,7 @@ class DigitalSignatureParameters:
         self.y_p = y_p
         self.hash_func = hash_func
         assert(p > 3)
-        #assert(isprime(p))
+        #assert(isprime(p))  we have no simple methods for checking this
         assert(m % q == 0 and m // q >= 1)
         assert(self.mult((x_p, y_p), q) == None)
         assert(2**254 < q < 2**256 or 2**508 < q < 2**512)
@@ -31,6 +45,11 @@ class DigitalSignatureParameters:
         assert(self.J != 0 and self.J != 1728)
 
     def pow_mod_p(self, base, power, mod):
+        """
+Modular exponentiation by squaring (quick modular exponentiation).
+
+All arguments and result are BigIntegers.
+        """
         if power == 0:
             assert(base == 0)
             return 1
@@ -44,11 +63,27 @@ class DigitalSignatureParameters:
         return res
 
     def div_mod_p(self, a, b):
+        """
+Returns a / b in the prime field with cardinality self.p.
+That means returning a * (b^(-1)) % self.p.
+According to Fermat's little theorem, b^(self.p - 1) = 1 (mod self.p).
+That means b^(-1) = b^(self.p - 2) (mod self.p).
+We compute b^(self.p - 2) using quick modular exponentiation.
+
+All arguments and result are BigIntegers.
+        """
         a = a % self.p
         b = b % self.p
         return a * self.pow_mod_p(b, self.p - 2, self.p) % self.p
 
     def add(self, p1, p2):
+        """
+Adds two points on the elliptic curve.
+
+Point is None for zero point.
+Point is a tuple of two BigIntegers otherwise.
+Returns point, sum of two input points.
+        """
         if p1 is None:
             return p2
         if p2 is None:
@@ -69,6 +104,15 @@ class DigitalSignatureParameters:
             return None
 
     def mult(self, p, k):
+        """
+Multiplies point of the elliptic curve p by BigInteger k.
+The algorithm is similar to the quick exponential by squaring,
+it may be called "quick multiplication by doubling".
+
+p : point (i. e., None or tuple(BigInteger, BigInteger))
+k : BigInteger
+Returns point (i. e. None or tuple(BigInteger, BigInteger))
+        """
         res = None
         while k != 0:
             if k % 2 == 1:
@@ -77,15 +121,37 @@ class DigitalSignatureParameters:
             k //= 2
         return res
 
+
 def generate_public_key(secret_key, parameters):
-    # returns point
+    """
+Given a secret key and parameters, generates public key
+according to GOST R 34.10-2012. It means just multiplication of fixed
+elliptic curve point by secret key.
+Validates secret_key according to GOST R 34.10-2012 constraints.
+
+secret_key : BigInteger
+parameters : DigitalSignatureParameters
+Returns point, i. e. tuple(BigInteger, BigInteger),
+None cannot be obtained because of mathematical guarantees.
+    """
     assert(0 < secret_key < parameters.q)
     public_key = parameters.mult((parameters.x_p, parameters.y_p), secret_key)
     assert(public_key != (parameters.x_p, parameters.y_p))
     return public_key
 
+
 def generate_common_KEK(secret_key, foreign_public_key, parameters, UKM = 1):
-    # foreign_public_key is point
+    """
+Generates Key Encryption Key using ours secret_key, foreign_public_key, parameters and UKM.
+UKM makes it more difficult to crack KEK with usage of precomputed tables.
+Algorithm is defined in GOST R 34.10-2012 or in GOST R 34.10-2001 (depends on hashing function).
+
+secret_key : BigInteger
+foreign_public_key : tuple(BigInteger, BigInteger), not None
+parameters : DigitalSignatureParameters
+UKM : BigInteger, optional
+Returns KEK : array of 64 bytes.
+    """
     assert(1 <= UKM <= 2**128 - 1)
     assert(foreign_public_key != (parameters.x_p, parameters.y_p))
     K = parameters.mult(foreign_public_key, (parameters.m / parameters.q * UKM * secret_key % parameters.q))
@@ -93,8 +159,14 @@ def generate_common_KEK(secret_key, foreign_public_key, parameters, UKM = 1):
     KEK = parameters.hash_func((K[0] * (2**256) + K[1]).to_bytes(512, 'big'))
     return KEK
 
+
 def GOST34112012H256(msg):
-    # hashing algorithm, returns int. msg is byte sequence.
+    """
+Hashing algorithm defined in GOST R 34.11-2012.
+
+msg : array of bytes
+Returns array of 64 bytes.
+    """
     pi_sharp = [
         252, 238, 221, 17, 207, 110, 49, 22, 251, 196, 250, 218, 35, 197, 4, 77, 233, 119, 240,
         219, 147, 46, 153, 186, 23, 54, 241, 187, 20, 205, 95, 193, 249, 24, 101, 90, 226, 92, 239,
@@ -224,7 +296,7 @@ def GOST34112012H256(msg):
     h = g(h, N, 0)
     h = MSB256(g(h, Sigma, 0))
 
-    return h
+    return h.to_bytes(64, 'big')
 
 
 class ECB_helper:
@@ -372,7 +444,7 @@ def GOST2814789KeyUnWrap(keyWrap, KEK):
   CEK = GOST2814789ECB_decode(CEK_ENC, KEK)
   if CEK_MAC == GOST2814789IMIT(CEK, KEK, helper.int32(UKM)):
     return CEK
-  else
+  else:
     return False
 
     
