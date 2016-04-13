@@ -1,3 +1,6 @@
+
+import array
+
 class DigitalSignatureParameters:
     """
 This class contains all nessecary settings and parameters of digital signature,
@@ -395,6 +398,8 @@ def GOST2814789ECB_encode(plain, key):
   res = list()
   keys = list()
   helper = ECB_helper()
+  if len(plain) % 8 != 0:
+    return False
   for i in range(32):
     if i < 24:
       j = i % 8
@@ -436,20 +441,23 @@ def GOST2814789ECB_decode(cipher, key):
       b = tmp
     res.extend(a.to_bytes(4, 'big'))
     res.extend(b.to_bytes(4, 'big'))
-  return res
+  bytes = len(res)
+  return helper.int32(res).to_bytes(bytes, 'big')
 
 # plain : array of bytes (length must be 8*n)
 # key : arrays of bytes (length must be 32)
-# init : int (must be < 2^64)
+# IV : int (must be < 2^64)
 # return value : array of 4 bytes
-def GOST2814789IMIT(plain, key, init):
+def GOST2814789IMIT(plain, key, IV = 0):
   res = list()
   keys = list()
+  if len(plain) % 8 != 0:
+    return False
   helper = ECB_helper()
   for i in range(16):  
     keys.append(helper.int32(key[(i % 16) * 4 : ((i % 16) + 1) * 4]))
-  last_a = init // (2**32)
-  last_b = init % (2**32)
+  last_a = IV // (2**32)
+  last_b = IV % (2**32)
   for i in range(len(plain) // 8):
     a = last_a ^ helper.int32(plain[i * 8 : i * 8 + 4])
     b = last_b ^ helper.int32(plain[i * 8 + 4 : i * 8 + 8]) 
@@ -463,7 +471,7 @@ def GOST2814789IMIT(plain, key, init):
   return res
 
 # CEK and KEK : arrays of bytes
-# return value: array of bytes, (UKM | CEK_ENC | CEK_MAC)
+# return value: list of bytes, (UKM | CEK_ENC | CEK_MAC)
 def GOST2814789KeyWrap(CEK, KEK):
   import random
   helper = ECB_helper()
@@ -481,14 +489,14 @@ def GOST2814789KeyWrap(CEK, KEK):
 # KEK : array of bytes
 # return value : CEK - array of bytes, or false in case of error
 def GOST2814789KeyUnWrap(keyWrap, KEK):
-  if len(keyWrap) == 44:
+  if len(keyWrap) != 44:
     return False
   helper = ECB_helper()
   UKM = keyWrap[0 : 8]
   CEK_ENC = keyWrap[8 : 40]
   CEK_MAC = keyWrap[40 : 44]
   CEK = GOST2814789ECB_decode(CEK_ENC, KEK)
-  if CEK_MAC == GOST2814789IMIT(CEK, KEK, helper.int32(UKM)):
+  if helper.int32(CEK_MAC) == helper.int32(GOST2814789IMIT(CEK, KEK, helper.int32(UKM))):
     return CEK
   else:
     return False

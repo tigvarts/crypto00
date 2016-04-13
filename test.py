@@ -22,4 +22,13 @@ def to_int(msg):
 
 assert(to_int(GOST2814789ECB_decode(GOST2814789ECB_encode(int(0x1001011011110000).to_bytes(32, 'big'), int(0x1001011000001111).to_bytes(32,'big')), int(0x1001011000001111).to_bytes(32,'big'))) == int(0x1001011011110000))
 
+KEK = generate_common_KEK(0xABACABA, generate_public_key(0xABACABADABA, base_parameters_1), base_parameters_1)
+assert(to_int(GOST2814789KeyUnWrap(GOST2814789KeyWrap(CEK, KEK), KEK)) == to_int(CEK))
+
+test = GOST2814789KeyWrap(CEK, KEK)
+test = (to_int(test) - 1).to_bytes(44, 'big')
+assert(GOST2814789KeyUnWrap(test, KEK) == False)
+
+
+
 print('OK.')
