@@ -1,0 +1,28 @@
+из папки test можно удалить все файлы, кроме secret_public.txt, secret_KEK.txt, IV.txt, message.txt
+
+python crypto.py -o test/public.txt --secret_key test/secret_public.txt --generate_public_key
+создает файл public.txt, в котором хранится сгенерированный открытый ключ, в secret_public.txt лежит ключ для генерации открытого ключа
+
+python crypto.py -o test/KEK.txt --secret_key test/secret_KEK.txt --public_key test/public.txt --generate_KEK
+создает KEK, используя публичный ключ, полученный на пред. шаге
+
+python crypto.py -o test/wrapped_CEK.txt --secret_key test/KEK.txt --hex --CEK test/CEK.txt --key_wrap
+в wrapped_CEK.txt - 44 байта, после свертки
+
+python crypto.py -o test/unwrapped_CEK.txt --secret_key test/KEK.txt --hex --filename test/wrapped_CEK.txt --key_unwrap
+получение CEK ключа после развертки свертки (записано в unwrapped_CEK.txt, можно сравнить с тем, что в CEK.txt)
+
+python crypto.py -o test/crypted_message_fm.txt --filename test/message.txt --secret_key test/unwrapped_CEK.txt --IV test/IV.txt --encrypt_fm
+зашифровка сообщения из message.txt в режиме гаммирования с обратной связью, результат записан в crypted_message_fm.txt (в 16 системе счисления), используется ключ СЕК, полученный после развертки, и вектор инициализации из IV.txt
+
+python crypto.py -o test/decrypted_message_fm.txt --hex --filename test/crypted_message_fm.txt --secret_key test/unwrapped_CEK.txt --IV test/IV.txt --decrypt_fm
+расшифровка сообщения, полученного на предыдущем шаге, и помещение расшифрованного сообщения в decrypted_message_fm.txt (можно сравнить с message.txt)
+
+python crypto.py -o test/crypted_message_ECB.txt --filename test/message.txt --secret_key test/KEK.txt --ECB_encrypt
+зашифровка сообщения в режиме простой замены (нужно, чтобы длина сообщения была кратна 8 байтам). Используется KEK из KEK.txt
+
+python crypto.py -o test/decrypted_message_ECB.txt --hex --filename test/crypted_message_ECB.txt --secret_key test/KEK.txt --ECB_decrypt
+расшифровка сообщения, полученного на предыдущем шаге, результат в decrypted_message_ECB.txt (можно сравнить с message.txt)
+
+python crypto.py -o test/hash.txt --filename test/message.txt --hash
+получение хэша сообщения из message.txt , результат в hash.txt
