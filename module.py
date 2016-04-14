@@ -387,7 +387,7 @@ class ECB_helper:
   # k : 32 bit subkey
   # return value : int
   def f(self, b, k):
-    return self.cycle_left(self.apply_sbox(b ^ k), 11, 32)
+    return self.cycle_left(self.apply_sbox((b + k) % (2**32)), 11, 32)
   
   
 #GOST 28147-89 ECB
